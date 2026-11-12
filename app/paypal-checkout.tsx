@@ -19,15 +19,16 @@ declare global {
   interface Window { paypal?: { createInstance: (options: { clientId: string; components: string[] }) => Promise<PaypalSdk> } }
 }
 
-export function PaypalCheckout({ analysisId, offerId, amount }: { analysisId: string | undefined; offerId: string; amount: string }) {
+export function PaypalCheckout({ checkoutToken, offerId, amount }: { checkoutToken: string | null; offerId: string; amount: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const orderCreationFailed = useRef(false);
   const [state, setState] = useState<CheckoutState>("idle");
   const [message, setMessage] = useState("");
   const [available, setAvailable] = useState(false);
   const clientId = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID;
 
   useEffect(() => {
-    if (!analysisId || !clientId || !containerRef.current) return;
+    if (!checkoutToken || !clientId || !containerRef.current) return;
     let disposed = false;
     let button: HTMLElement | null = null;
     let clickHandler: (() => void) | null = null;
@@ -58,43 +59,55 @@ export function PaypalCheckout({ analysisId, offerId, amount }: { analysisId: st
         const session = await sdk.createPayPalOneTimePaymentSession({
           onApprove: async ({ orderId }) => {
             setState("loading");
-            const response = await fetch("/api/paypal/capture", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ orderId }),
-            });
-            const result = await response.json() as { status?: string; captureId?: string | null; error?: string };
-            if (result.status === "completed") {
-              setState("success");
-              setMessage(`Sandbox payment completed${result.captureId ? ` (capture ${result.captureId})` : ""}. No sample seller was paid.`);
-            } else if (result.status === "pending") {
-              setState("pending");
-              setMessage("PayPal reports this Sandbox payment as pending. No sample seller was paid.");
-            } else {
+            try {
+              const response = await fetch("/api/paypal/capture", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ orderId, checkoutToken }),
+              });
+              const result = await response.json() as { status?: string; captureId?: string | null; error?: string };
+              if (!response.ok) throw new Error(result.error ?? "PayPal could not confirm this Sandbox payment.");
+              if (result.status === "completed") {
+                setState("success");
+                setMessage(`Sandbox payment completed${result.captureId ? ` (capture ${result.captureId})` : ""}. No sample seller was paid.`);
+              } else if (result.status === "pending") {
+                setState("pending");
+                setMessage("PayPal reports this Sandbox payment as pending. No sample seller was paid.");
+              } else throw new Error(result.error ?? "PayPal could not confirm this Sandbox payment.");
+            } catch (error) {
               setState("failed");
-              setMessage(result.error ?? "PayPal could not confirm this Sandbox payment.");
+              setMessage(error instanceof Error ? error.message : "PayPal could not confirm this Sandbox payment.");
             }
           },
-          onCancel: () => { setState("cancelled"); setMessage("PayPal Sandbox checkout was cancelled. No capture was requested."); },
+          onCancel: () => {
+            if (orderCreationFailed.current) return;
+            setState("cancelled");
+            setMessage("PayPal Sandbox checkout was cancelled. No capture was requested.");
+          },
           onError: () => { setState("failed"); setMessage("PayPal Sandbox checkout could not be completed. Please try again."); },
         });
         button = document.createElement("paypal-button");
         clickHandler = () => {
-          if (!analysisId) return;
+          if (!checkoutToken) return;
+          orderCreationFailed.current = false;
           setState("loading");
           setMessage("");
           const createOrder = fetch("/api/paypal/orders", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ analysisId, offerId }),
+            body: JSON.stringify({ checkoutToken, offerId }),
           }).then(async (response) => {
             const result = await response.json() as { orderId?: string; error?: string };
-            if (!response.ok || !result.orderId) throw new Error(result.error ?? "Could not create a PayPal Sandbox order.");
+            if (!response.ok || !result.orderId) {
+              orderCreationFailed.current = true;
+              throw new Error(result.error ?? "PayPal Sandbox order creation failed. No payment was captured.");
+            }
             return { orderId: result.orderId };
           });
           void session.start({ presentationMode: "auto" }, createOrder).catch((error: unknown) => {
+            if (!orderCreationFailed.current) orderCreationFailed.current = true;
             setState("failed");
-            setMessage(error instanceof Error ? error.message : "PayPal Sandbox checkout failed.");
+            setMessage(`${error instanceof Error ? error.message : "PayPal Sandbox checkout failed."} No payment was captured.`);
           });
         };
         button.addEventListener("click", clickHandler);
@@ -109,9 +122,9 @@ export function PaypalCheckout({ analysisId, offerId, amount }: { analysisId: st
       if (button && clickHandler) button.removeEventListener("click", clickHandler);
       button?.remove();
     };
-  }, [analysisId, clientId, offerId]);
+  }, [checkoutToken, clientId, offerId]);
 
-  if (!analysisId) return <p className="paypal-note">Run an analysis to validate this offer before checkout.</p>;
+  if (!checkoutToken) return <p className="paypal-note">PayPal Sandbox checkout is unavailable until server-side eligibility can be secured. Check the server Sandbox credentials.</p>;
   if (!clientId) return <p className="paypal-note">PayPal Sandbox is not configured. Set NEXT_PUBLIC_PAYPAL_CLIENT_ID to enable checkout.</p>;
   return <div className="paypal-checkout">
     <div className="paypal-label">PAYPAL SANDBOX CHECKOUT · {amount} USD</div>

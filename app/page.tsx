@@ -24,7 +24,7 @@ type AnalyzeResult = {
   noMatch: boolean;
   demo: true;
   analysisSource: "gemini" | "deterministic";
-  analysisId: string;
+  checkoutToken: string | null;
 };
 
 function Icon({ name, size = 20 }: { name: string; size?: number }) {
@@ -222,8 +222,8 @@ export default function Home() {
           <div className="approved-product"><div className="product-thumb"><div className="keyboard-art"><span/><span/><span/><span/><span/><span/><span/><span/><span/></div></div><div><strong>{selected.productName}</strong><span>{selected.seller} · {selected.quality} build</span></div><span className="product-price">{money(selected.price)}</span></div>
           <div className="cost-lines"><div><span>Listed price</span><span>{money(selected.price)}</span></div><div><span>Suggested counteroffer <em>SIMULATED · NOT ACCEPTED</em></span><span className="cost-green">{money(Math.max(0, selected.price - 7))}</span></div><div className="final-total"><strong>PayPal Sandbox checkout amount</strong><strong>{money(selected.price)}<small> USD</small></strong></div></div>
           <p className="checkout-explanation">The suggested counteroffer is only a demo. The Sandbox checkout uses the seller&apos;s listed price because no seller has accepted a different amount.</p>
-          {result?.analysisId && result.eligibleOfferIds.includes(selected.id)
-            ? <PaypalCheckout analysisId={result.analysisId} offerId={selected.id} amount={money(selected.price)} />
+          {result?.checkoutToken && result.eligibleOfferIds.includes(selected.id)
+            ? <PaypalCheckout checkoutToken={result.checkoutToken} offerId={selected.id} amount={money(selected.price)} />
             : <p className="paypal-note">Run an analysis and confirm this offer is eligible to enable checkout.</p>}
           <div className="trust-message"><Icon name="shield" size={15}/><span>You choose whether to continue in PayPal Sandbox.<br/><strong>This demo does not pay sample sellers.</strong></span></div>
           <div className="no-payment-note">Sandbox transaction only · No marketplace payout or escrow</div>

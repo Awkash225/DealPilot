@@ -51,7 +51,7 @@ export function purchaseUnitAmount(data: unknown) {
   const unit = data.purchase_units[0];
   if (!isRecord(unit) || !isRecord(unit.amount)) return null;
   const { currency_code, value } = unit.amount;
-  return typeof currency_code === "string" && typeof value === "string" ? { currency: currency_code, value, referenceId: unit.reference_id } : null;
+  return typeof currency_code === "string" && typeof value === "string" ? { currency: currency_code, value, referenceId: unit.reference_id, customId: unit.custom_id } : null;
 }
 
 export function captureAmounts(data: unknown) {

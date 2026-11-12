@@ -51,7 +51,7 @@ After the buyer approves the order with PayPal, the server retrieves and verifie
 - PayPal Orders v2 REST API from server-only routes.
 - PayPal JavaScript SDK v6 for buyer approval.
 - Trusted sample offer catalog in `lib/offers.ts`.
-- In-memory checkout and eligibility state in `lib/checkout-state.ts`.
+- Short-lived HMAC-signed checkout eligibility tokens and deterministic PayPal request IDs, verified against the trusted offer catalog on every server request.
 
 Key routes and files:
 
@@ -117,7 +117,7 @@ No live Sandbox transaction was verified as part of repository setup. A successf
 - No sample seller has accepted a counteroffer or receives a payout from this app.
 - PayPal Sandbox payments are test transactions and go to the Sandbox merchant associated with the configured REST app.
 - There is no marketplace payout, escrow, shipping workflow, or real purchase fulfillment.
-- Eligibility, checkout records, and duplicate-capture claims are held in process memory. They are lost on restart and are not shared across server instances. This state model is for a single-server hackathon prototype only; it is not suitable for production or multi-instance deployment.
+- Checkout eligibility is a two-hour HMAC-signed token using the existing server-only `PAYPAL_CLIENT_SECRET`. Server routes independently recheck offer requirements, eligibility, budget, order amount, and currency. Deterministic PayPal request IDs and PayPal order reads support retries across serverless instances. The app has no durable order ledger or buyer identity; expired tokens require a fresh analysis. This remains a hackathon prototype, not a production marketplace payment system.
 - Gemini can be unavailable; after model request attempts fail, deterministic demo analysis is labeled separately. Malformed or incomplete Gemini output is rejected by response validation.
 
 ## Security considerations
@@ -127,7 +127,7 @@ No live Sandbox transaction was verified as part of repository setup. A successf
 - Use only Sandbox PayPal credentials with this prototype. The server uses a fixed Sandbox REST host.
 - Order amounts and offer details come from the server’s trusted sample catalog, not browser or AI payment fields.
 - The server checks offer eligibility, budget, order status, amount, currency, and capture response before reporting success.
-- In-memory state does not provide durable idempotency or cross-instance coordination. Do not use this prototype for production payments.
+- PayPal idempotency is provided for order creation and capture using deterministic request IDs; the application itself has no durable transaction ledger, buyer identity, or marketplace payout controls.
 - Sandbox payments are not seller payments. Never represent a demo analysis or test transaction as a real seller match or fulfillment.
 
 ## Checks

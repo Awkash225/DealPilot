@@ -1,6 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { demoOffers, explicitRequirements, meetsRequirement, type Requirement } from "@/lib/offers";
-import { rememberAnalysis } from "@/lib/checkout-state";
+import { createCheckoutToken } from "@/lib/checkout-state";
 
 export const maxDuration = 60;
 
@@ -116,7 +116,7 @@ function deterministicAnalysis(mission: string, budget: number) {
   });
   const category = /keyboard/i.test(mission) ? "Mechanical keyboard" : "Sample offers";
   const requiredNames = essentials.map(({ attribute }) => attribute === "wireless" ? "Wireless" : attribute === "hotSwap" ? "Hot-swappable switches" : attribute);
-  const analysisId = rememberAnalysis({ mission, budget, requirements: essentials, eligibleOfferIds: eligibleOffers.map((offer) => offer.id) });
+  const checkoutToken = createCheckoutToken({ budget, requirements: essentials });
   return {
     analysis: {
       productCategory: category,
@@ -136,7 +136,7 @@ function deterministicAnalysis(mission: string, budget: number) {
     noMatch: !recommendedOffer,
     demo: true as const,
     analysisSource: "deterministic" as const,
-    analysisId,
+    checkoutToken,
   };
 }
 
@@ -252,7 +252,7 @@ export async function POST(request: Request) {
         ? `Would you consider $${Math.max(0, recommendedOffer.price - 7)} for the ${recommendedOffer.productName}? This is a simulated draft; no seller has received it.`
         : "No negotiation draft is available because there is no qualifying offer.",
     };
-    const analysisId = rememberAnalysis({ mission: mission.trim(), budget, requirements: essentials, eligibleOfferIds: eligibleOffers.map((offer) => offer.id) });
+    const checkoutToken = createCheckoutToken({ budget, requirements: essentials });
     return Response.json({
       analysis: analysisForBuyer,
       recommendedOfferId: recommendedOffer?.id ?? null,
@@ -261,7 +261,7 @@ export async function POST(request: Request) {
       noMatch: !recommendedOffer,
       demo: true,
       analysisSource: "gemini",
-      analysisId,
+      checkoutToken,
     });
   } catch (error) {
     const details = getGeminiErrorDetails(error);
